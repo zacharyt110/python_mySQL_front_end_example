@@ -1,104 +1,10 @@
-
 import sys
 import mysql.connector
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QTextEdit, QVBoxLayout, QWidget,
-    QLineEdit, QLabel, QFormLayout, QDialog, QMessageBox
+    QLineEdit, QFormLayout, QDialog, QMessageBox
 )
-
-
-def database_credentials():
-    """
-    Returns the database connection details as a dictionary.
-    """
-    return {
-        'host': 'localhost',
-        'user': 'root',
-        'password': 'BlackHoles!1',
-        'database': 'testdatabase',
-        'port': 3306
-    }
-
-
-def fetch_all_data():
-    """
-    Fetches all rows from the V1550A table.
-    """
-    try:
-        db_credentials = database_credentials()
-        connection = mysql.connector.connect(**db_credentials)
-        cursor = connection.cursor()
-
-        query = "SELECT * FROM V1550A;"
-        cursor.execute(query)
-        results = cursor.fetchall()
-
-        if results:
-            return "\n".join(str(row) for row in results)
-        else:
-            return "No data found in the table."
-
-    except mysql.connector.Error as err:
-        return f"Error: {err}"
-    finally:
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.close()
-
-
-def fetch_serial_number_data(serial_number):
-    """
-    Fetches rows from the V1550A table where the serial number matches the given value.
-    """
-    try:
-        db_config = database_credentials()
-        connection = mysql.connector.connect(**db_config)
-        cursor = connection.cursor()
-
-        query = "SELECT * FROM V1550A WHERE serial_number = %s;"
-        cursor.execute(query, (serial_number,))
-        results = cursor.fetchall()
-
-        if results:
-            return "\n".join(str(row) for row in results)
-        else:
-            return f"No data found for serial number: {serial_number}"
-
-    except mysql.connector.Error as err:
-        return f"Error: {err}"
-    finally:
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.close()
-
-
-def insert_data(model_number, serial_number, operator, voa_sn, connectorization, min_attenuation, max_attenuation, max_current, per_a, per_b, qc_inspector, date_closed):
-    """
-    Inserts a new row into the V1550A table.
-    """
-    try:
-        db_config = database_credentials()
-        connection = mysql.connector.connect(**db_config)
-        cursor = connection.cursor()
-
-        query = """
-        INSERT INTO V1550A (model_number, serial_number, operator, VOA_sn, connectorization, min_attenuation, max_attenuation, max_current, per_a, per_b, qc_inspector, date_closed)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-        """
-        cursor.execute(query, (model_number, serial_number, operator, voa_sn, connectorization, min_attenuation, max_attenuation, max_current, per_a, per_b, qc_inspector, date_closed))
-        connection.commit()
-        return "Data inserted successfully."
-
-    except mysql.connector.Error as err:
-        return f"Error: {err}"
-    finally:
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.close()
-
+from actions import fetch_all_data, fetch_serial_number_data, insert_data, search_data  # Import insert_data and search_data
 
 class AddDataWindow(QDialog):
     """
@@ -173,6 +79,54 @@ class AddDataWindow(QDialog):
         self.close()
 
 
+class SearchWindow(QDialog):
+    """
+    A dialog window for searching data in the V1550A table.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Search Data")
+        self.setGeometry(200, 200, 400, 200)
+
+        # Create a form layout
+        layout = QFormLayout()
+
+        # Input fields
+        self.serial_number_input = QLineEdit()
+        self.model_number_input = QLineEdit()
+
+        # Add input fields to the form
+        layout.addRow("Serial Number:", self.serial_number_input)
+        layout.addRow("Model Number:", self.model_number_input)
+
+        # Add buttons
+        button_layout = QVBoxLayout()
+        search_button = QPushButton("Search")
+        search_button.clicked.connect(self.handle_search)
+        cancel_button = QPushButton("Cancel")
+        cancel_button.clicked.connect(self.close)
+        button_layout.addWidget(search_button)
+        button_layout.addWidget(cancel_button)
+        layout.addRow(button_layout)
+
+        self.setLayout(layout)
+
+    def handle_search(self):
+        """
+        Handles the search operation.
+        """
+        serial_number = self.serial_number_input.text().strip()
+        model_number = self.model_number_input.text().strip()
+
+        result = search_data(serial_number if serial_number else None, model_number if model_number else None)
+
+        if result:
+            self.parent().output_box.setText(result)
+            self.close()
+        else:
+            QMessageBox.information(self, "No Results", "No entries found matching the search criteria.")
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -204,6 +158,11 @@ class MainWindow(QMainWindow):
         add_data_button.clicked.connect(self.open_add_data_window)
         layout.addWidget(add_data_button)
 
+        # Create a button to search data
+        search_button = QPushButton("Search Data")
+        search_button.clicked.connect(self.open_search_window)
+        layout.addWidget(search_button)
+
         # Set the layout and central widget
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
@@ -229,6 +188,13 @@ class MainWindow(QMainWindow):
         """
         self.add_data_window = AddDataWindow()
         self.add_data_window.exec_()
+
+    def open_search_window(self):
+        """
+        Opens the Search Data window.
+        """
+        self.search_window = SearchWindow(self)
+        self.search_window.exec_()
 
 
 # Run the application
